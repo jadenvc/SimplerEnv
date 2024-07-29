@@ -14,6 +14,22 @@ import torch
 import requests
 import json_numpy
 import base64
+from PIL import Image
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
+# === Utilities ===
+SYSTEM_PROMPT = (
+    "A chat between a curious user and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the user's questions."
+)
+
+
+def get_openvla_prompt(instruction: str, openvla_path: Union[str, Path]) -> str:
+    if True: #"v01" in openvla_path:
+        return f"{SYSTEM_PROMPT} USER: What action should the robot take to {instruction.lower()}? ASSISTANT:"
+    # else:
+    #     return f"In: What action should the robot take to {instruction.lower()}?\nOut:"
 
 def deserialize_numpy_array(serialized_dict):
     # Extract data from the dictionary
@@ -33,7 +49,7 @@ def deserialize_numpy_array(serialized_dict):
 class OpenVLAInference:
     def __init__(
         self,
-        saved_model_path: str = "eCOT",
+        model: str = "ECoT",
         lang_embed_model_path: str = "https://tfhub.dev/google/universal-sentence-encoder-large/5",
         image_width: int = 320,
         image_height: int = 256,
@@ -41,19 +57,32 @@ class OpenVLAInference:
         policy_setup: str = "google_robot",
     ) -> None:
         self.lang_embed_model = hub.load(lang_embed_model_path)
-        self.tfa_policy = py_tf_eager_policy.SavedModelPyTFEagerPolicy(
-            model_path=saved_model_path,
-            load_specs_from_pbtxt=True,
-            use_tf_function=True,
-        )
-        # hf_model_path = "Embodied-CoT/ecot-openvla-7b-bridge"
-        # self.processor = AutoProcessor.from_pretrained(hf_model_path, trust_remote_code=True)
-        # self.model = AutoModelForVision2Seq.from_pretrained(
-        #     hf_model_path,
-        #     torch_dtype=torch.bfloat16,
-        #     low_cpu_mem_usage=True,
-        #     trust_remote_code=True,
-        # ).to(self.device)
+        # self.tfa_policy = py_tf_eager_policy.SavedModelPyTFEagerPolicy(
+        #     model_path=saved_model_path,
+        #     load_specs_from_pbtxt=True,
+        #     use_tf_function=True,
+        # )
+
+        self.model = model
+
+        self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
+        if self.model == "ECoT":
+            self.hf_model_path = "Embodied-CoT/ecot-openvla-7b-bridge"
+            print("using ECoT")
+        else:
+            self.hf_model_path = "openvla/openvla-7b" 
+            print("using open vla")
+        
+        self.processor = AutoProcessor.from_pretrained(self.hf_model_path, trust_remote_code=True)
+        self.vla = AutoModelForVision2Seq.from_pretrained(
+            self.hf_model_path,
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+        ).to(self.device)
+
+        print("loaded vla")
 
 
         self.image_width = image_width
@@ -215,23 +244,51 @@ class OpenVLAInference:
 
         # breakpoint()
 
-        payload = {
-            "image": np.array(image).tolist(),
-            "instruction": self.task_description
-        }
+        image = np.array(image, dtype=np.uint8)
+        instruction = self.task_description
 
-        # action = requests.post("http://0.0.0.0:8000/act", json=payload).json()
-        response = requests.post("http://localhost:8000/act", json=payload).json()
+        prompt = get_openvla_prompt(instruction, self.hf_model_path)
 
-        # print("RESPONSE: ", response)
-
+        inputs = self.processor(prompt, Image.fromarray(image).convert("RGB")).to(self.device, dtype=torch.bfloat16)
+        # action = self.vla.predict_action(**inputs, unnorm_key=unnorm_key, do_sample=False)
+        # generated_text = ""
+        torch.manual_seed(0)
         # breakpoint()
+        if self.model == "ECoT":
+            raw_action, generated_ids = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
+            # action, generated_ids = self.vla_pa(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
+            generated_text = self.processor.batch_decode(generated_ids)[0]
+        else:
+            raw_action = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
+            generated_text = ""
+        # breakpoint()
+        # print("action")
+        # print(raw_action)
 
-        generated_text = response.get("generated_text", "")
-        # generated_text=""
-        action = response.get("action", {})  
 
-        raw_action1 = deserialize_numpy_array(action)
+
+
+
+        # payload = {
+        #     "image": np.array(image).tolist(),
+        #     "instruction": self.task_description
+        # }
+
+        # # action = requests.post("http://0.0.0.0:8000/act", json=payload).json()
+        # response = requests.post("http://localhost:8000/act", json=payload).json()
+
+        # # print("RESPONSE: ", response)
+
+        # # breakpoint()
+
+        # generated_text = response.get("generated_text", "")
+        # # generated_text=""
+        # action = response.get("action", {})  
+
+        # raw_action = deserialize_numpy_array(action)
+
+
+
 
         # breakpoint()
 
@@ -243,73 +300,14 @@ class OpenVLAInference:
         #     action, generated_ids = self.model.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
 
         # Process the raw action to fit the expected format
-        raw_action = {
-            "world_vector": raw_action1[:3],
-            "rotation_delta": raw_action1[3:6],
-            "gripper_closedness_action": raw_action1[6],
+        formatted = {
+            "world_vector": raw_action[:3],
+            "rotation_delta": raw_action[3:6],
+            "gripper_closedness_action": raw_action[6],
             # "terminate_episode": action[7]
         }
 
-        # return raw_action, action, generated_text
-
-
-        # obtain (unnormalized and filtered) raw action from model forward pass
-        # self.tfa_time_step = ts.transition(self.observation, reward=np.zeros((), dtype=np.float32))
-        # policy_step = self.tfa_policy.action(self.tfa_time_step, self.policy_state)
-        # raw_action = policy_step.action
-        if self.policy_setup == "google_robot":
-            raw_action = self._small_action_filter_google_robot(raw_action, arm_movement=False, gripper=True)
-        if self.unnormalize_action:
-            raw_action = self.unnormalize_action_fxn(raw_action)
-        for k in raw_action.keys():
-            raw_action[k] = np.asarray(raw_action[k])
-
-        # process raw_action to obtain the action to be sent to the maniskill2 environment
-        action = {}
-        action["world_vector"] = np.asarray(raw_action["world_vector"], dtype=np.float64) * self.action_scale
-        if self.action_rotation_mode == "axis_angle":
-            action_rotation_delta = np.asarray(raw_action["rotation_delta"], dtype=np.float64)
-            action_rotation_angle = np.linalg.norm(action_rotation_delta)
-            action_rotation_ax = (
-                action_rotation_delta / action_rotation_angle
-                if action_rotation_angle > 1e-6
-                else np.array([0.0, 1.0, 0.0])
-            )
-            action["rot_axangle"] = action_rotation_ax * action_rotation_angle * self.action_scale
-        elif self.action_rotation_mode in ["rpy", "ypr", "pry"]: #yes
-            if self.action_rotation_mode == "rpy": #yes
-                roll, pitch, yaw = np.asarray(raw_action["rotation_delta"], dtype=np.float64)
-            elif self.action_rotation_mode == "ypr":
-                yaw, pitch, roll = np.asarray(raw_action["rotation_delta"], dtype=np.float64)
-            elif self.action_rotation_mode == "pry":
-                pitch, roll, yaw = np.asarray(raw_action["rotation_delta"], dtype=np.float64)
-            action_rotation_ax, action_rotation_angle = euler2axangle(roll, pitch, yaw)
-            action["rot_axangle"] = action_rotation_ax * action_rotation_angle * self.action_scale
-        else:
-            raise NotImplementedError()
-
-        raw_gripper_closedness = raw_action["gripper_closedness_action"]
-        if self.invert_gripper_action:
-            # rt1 policy output is uniformized such that -1 is open gripper, 1 is close gripper;
-            # thus we need to invert the rt1 output gripper action for some embodiments like WidowX, since for these embodiments -1 is close gripper, 1 is open gripper
-            raw_gripper_closedness = -raw_gripper_closedness
-        if self.policy_setup == "google_robot":
-            # gripper controller: pd_joint_target_delta_pos_interpolate_by_planner; raw_gripper_closedness has range of [-1, 1]
-            action["gripper"] = np.asarray(raw_gripper_closedness, dtype=np.float64)
-        elif self.policy_setup == "widowx_bridge":
-            # gripper controller: pd_joint_pos; raw_gripper_closedness has range of [-1, 1]
-            action["gripper"] = np.asarray(raw_gripper_closedness, dtype=np.float64)
-            # binarize gripper action to be -1 or 1
-            action["gripper"] = 2.0 * (action["gripper"] > 0.0) - 1.0
-        else:
-            raise NotImplementedError()
-
-        # action["terminate_episode"] = raw_action["terminate_episode"]
-
-        # update policy state
-        # self.policy_state = policy_step.state
-
-        return raw_action1, action, generated_text
+        return raw_action, formatted, generated_text
 
     def visualize_epoch(self, predicted_raw_actions: Sequence[np.ndarray], images: Sequence[np.ndarray], save_path: str) -> None:
         images = [self._resize_image(image) for image in images]
