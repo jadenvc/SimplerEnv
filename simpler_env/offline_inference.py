@@ -92,15 +92,15 @@ for timestep in range(len(image_list)):
 
     raw_action, action, generated_text = model.step(image_list[timestep], instruction)
 
-    if args.model == "ECoT":
-        generate_reasoning_image(generated_text, image, timestep)
+    # if args.model == "ECoT":
+    #     generate_reasoning_image(generated_text, image, timestep)
 
     # breakpoint()
     print(timestep)
     print(raw_action)
 
-    # with open('simpler_env/test_data/ecot9vr.txt', 'a') as f:  # Use 'a' mode to append to the file
-    #     np.savetxt(f, raw_action, fmt='%f', newline=' ')
-    #     f.write('\n')  # Add a newline after each array
+    with open(f'simpler_env/test_data/{model}{tj}.txt', 'a') as f:  # Use 'a' mode to append to the file
+        np.savetxt(f, raw_action, fmt='%f', newline=' ')
+        f.write('\n')  # Add a newline after each array
 
     images.append(image)

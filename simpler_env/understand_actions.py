@@ -25,13 +25,13 @@ def read_arrays_from_file(filename):
     return arrays
 
 # traj number
-tj = 9
+tj = 0
 gt_path = "/iliad/group/datasets/bridgedata_v2/raw/bridge_data_v2/datacol1_toykitchen1/many_skills/0/2023-03-15_14-35-28/raw/traj_group0/traj" + str(tj)+"/"
 gt_actions = process_actions(gt_path)
 
-vla_actions = read_arrays_from_file("test_data/vla2.txt")
+vla_actions = read_arrays_from_file("simpler_env/test_data/vla0.txt")
 
-ecot_actions = read_arrays_from_file("test_data/ecot9.txt")
+ecot_actions = read_arrays_from_file("simpler_env/test_data/ecot0.txt")
 
 # get l2 norm between vla and gt actions
 vla_dif = []
@@ -48,12 +48,12 @@ for i in range(len(gt_actions)):
 # print("average l2 norm between gt and vla: ", np.mean(vla_dif))
 print("average l2 norm between gt and ecot: ", np.mean(ecot_dif))
 
-
+# print()
 # Plotting
 for index in range (7):
     plt.figure(figsize=(10, 6))
     plot_third_dimension(gt_actions, index, 'Ground Truth', 'blue')
-    # plot_third_dimension(vla_actions, index, 'VLA', 'green')
+    plot_third_dimension(vla_actions, index, 'VLA', 'green')
     plot_third_dimension(ecot_actions, index, 'ECOT', 'red')
 
     plt.xlabel('Time Step')
@@ -63,7 +63,7 @@ for index in range (7):
     plt.grid(True)
 
     # Save the plot as a PNG file
-    output_file = "action_plots/v"+str(tj) + "_"+str(index)+'_dimension_plot.png'
+    output_file = "simpler_env/action_plots/v"+str(tj) + "_"+str(index)+'_dimension_plot.png'
     plt.savefig(output_file)
     # clear the plot
     plt.clf()
