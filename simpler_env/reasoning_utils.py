@@ -169,3 +169,19 @@ def generate_reasoning_image(generated_text, image, timestep):
     # Save the image
     output_path = os.path.join(output_dir, f"reasoning_{timestep}.png")
     reasoning_img.save(output_path)
+
+
+def extract_number(filename):
+    # Assuming the filename format is img_#.jpg
+    return int(filename.split('_')[1].split('.')[0])
+
+def resize_image(img, resize_size):
+    """Takes numpy array corresponding to a single image and returns resized image as numpy array."""
+    assert isinstance(resize_size, tuple)
+    img = Image.fromarray(img)
+    BRIDGE_ORIG_IMG_SIZE = (256, 256)
+    img = img.resize(BRIDGE_ORIG_IMG_SIZE, Image.Resampling.LANCZOS)
+    img = img.resize(resize_size, Image.Resampling.LANCZOS)  # also resize to size seen at train time
+    img = img.convert("RGB")
+    img = np.array(img)
+    return img
