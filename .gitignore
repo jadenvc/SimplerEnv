@@ -27,3 +27,7 @@ dist/
 .vscode
 
 imgui.ini
+
+pregenerated_visualizations
+simpler_env/action_videos
+simpler_env/action_plots

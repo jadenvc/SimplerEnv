@@ -27,7 +27,9 @@ SYSTEM_PROMPT = (
 
 def get_openvla_prompt(instruction: str, openvla_path: Union[str, Path]) -> str:
     if True: #"v01" in openvla_path:
-        return f"{SYSTEM_PROMPT} USER: What action should the robot take to {instruction.lower()}? ASSISTANT:"
+        # return f"{SYSTEM_PROMPT} USER: What action should the robot take to {instruction.lower()}? ASSISTANT:"
+        return f"{SYSTEM_PROMPT} USER: What action should the robot take to {instruction.lower()}? ASSISTANT: TASK:"
+
     # else:
     #     return f"In: What action should the robot take to {instruction.lower()}?\nOut:"
 
@@ -82,7 +84,7 @@ class OpenVLAInference:
             trust_remote_code=True,
         ).to(self.device)
 
-        print("loaded vla")
+        # print("loaded vla")
 
 
         self.image_width = image_width
