@@ -257,11 +257,11 @@ class OpenVLAInference:
         torch.manual_seed(0)
         # breakpoint()
         if self.model == "ECoT":
-            raw_action, generated_ids = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
+            raw_action, generated_ids = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=True, max_new_tokens=1024, temperature=0.8)
             # action, generated_ids = self.vla_pa(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
             generated_text = self.processor.batch_decode(generated_ids)[0]
         else:
-            raw_action = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
+            raw_action = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=True, temperature=0.8)
             generated_text = ""
         # breakpoint()
         # print("action")

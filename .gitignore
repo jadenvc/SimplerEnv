@@ -31,3 +31,11 @@ imgui.ini
 pregenerated_visualizations
 simpler_env/action_videos
 simpler_env/action_plots
+
+eval_results/
+eval_results_old/
+simpler_env/test.ipynb
+
+val_eval_results/
+val_eval_results_old/
+val_pregenerated_visualizations/
