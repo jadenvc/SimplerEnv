@@ -118,15 +118,17 @@ def create_composite_image(image_array, gripper_position, visible_objects, reaso
     image = Image.fromarray(image_array)
     original_width, original_height = image.size
 
-    # # Check if the original image is 256x256 and scale it up if so
+    # Check if the original image is 256x256 and scale it up if so
     # if original_width == 256 and original_height == 256:
-    #     image = image.resize((512, 512), Image.ANTIALIAS)
-    #     original_width, original_height = image.size
+    image = image.resize((1024, 1024))
+    original_width, original_height = image.size
+
 
     # Scaling factors (since the image is now scaled up to 512x512)
     scale_x = original_width / 256
     scale_y = original_height / 256
-
+    
+    
     # Create a new image with double the width to accommodate the text
     composite_image = Image.new('RGB', (2 * original_width, original_height), (255, 255, 255))
     composite_image.paste(image, (0, 0))
@@ -144,8 +146,8 @@ def create_composite_image(image_array, gripper_position, visible_objects, reaso
         )
 
     # Define font for text with increased size
-    font1 = ImageFont.load_default().font_variant(size=22)  # Larger size for main text
-    font2 = ImageFont.load_default().font_variant(size=16)
+    font1 = ImageFont.load_default().font_variant(size=44)  # Larger size for main text
+    font2 = ImageFont.load_default().font_variant(size=32)
         
     # Draw visible objects bounding boxes and labels
     for obj_label, bbox in visible_objects:
@@ -248,14 +250,15 @@ def calculate_mse(actions_gt, actions_model):
     mse_list = [np.mean((gt - model) ** 2) for gt, model in zip(actions_gt, actions_model)]
     return mse_list
 
-def generate_and_store_visualizations(results, ds_subset, output_directory):
+@st.cache_data
+def generate_and_store_visualizations(results, _ds_subset, output_directory):
     global ALREADY_PROCESSED
     if ALREADY_PROCESSED:
         return
     
     os.makedirs(output_directory, exist_ok=True)
     
-    for i, trajectory_obj in tqdm(enumerate(ds_subset), total=len(ds_subset)):
+    for i, trajectory_obj in tqdm(enumerate(_ds_subset), total=len(_ds_subset)):
         
         trajectory_metadata = trajectory_obj["episode_metadata"]
         trajectory_steps = trajectory_obj["steps"]
@@ -368,25 +371,12 @@ def generate_and_store_visualizations(results, ds_subset, output_directory):
     print("All visualizations generated and stored.")
     
         
-# no shuffle method 1
-# tf.random.set_seed(42)
-# np.random.seed(42)
 
-# # Load the full dataset
-# ds_val = tfds.load('bridge_dataset', data_dir="/iliad/group/datasets/OXE_OCTO", split='val')
-
-# # Convert to a list, shuffle, and take the first subset_size elements
-# all_examples = list(ds_val)
-# np.random.shuffle(all_examples)
-# subset_size = 50
-# ds_subset = all_examples[:subset_size]
-
-# Shuffle method 2
-# Set the TensorFlow seed for all random operations
 # Load data at app startup
 ds_subset = load_dataset()
 results = load_results()
 mse_dict = compute_mse_dict(results, ds_subset)
+generate_and_store_visualizations(results, ds_subset, 'val_pregenerated_visualizations')
 
 
 # Set the title of the app
@@ -399,101 +389,7 @@ trajectories_completed = list(mse_dict.keys())
 # Dropdown to select the trajectory
 selected_trajectory = st.selectbox('Select a trajectory', trajectories_completed)
 
-# # Display the selected trajectory plot
-# if selected_trajectory:
-#     instruction = results[selected_trajectory]["OpenVLA"]["instruction"]
-    
-#     st.markdown(f'## Task Instruction: {instruction}')
-#     st.write("  ")
-    
-#     # # For the MSE PLOT
-#     # # Load actions and calculate MSE for each frame
-#     # data_idx, episode_id = extract_trajectory_info(selected_trajectory)
-#     # trajectory_obj = ds_subset[data_idx]
-#     # trajectory_metadata = trajectory_obj["episode_metadata"]
-#     # trajectory_steps = trajectory_obj["steps"]
-    
-#     # gt_actions = process_actions(trajectory_steps)
-#     # vla_actions = [elem['raw_action'] for elem in results[selected_trajectory]["OpenVLA"]['actions']]
-#     # ecot_actions = [elem['raw_action'] for elem in results[selected_trajectory]["ECoT"]['actions']]
 
-#     # Calculate MSE
-#     vla_mse = mse_dict[selected_trajectory]["VLA"]
-#     ecot_mse = mse_dict[selected_trajectory]["ECOT"]
-
-#     # Create Plotly figure
-#     fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-#     # Add traces
-#     fig.add_trace(
-#         go.Scatter(x=list(range(len(vla_mse))), y=vla_mse, name="VLA", line=dict(color="green")),
-#         secondary_y=False,
-#     )
-
-#     fig.add_trace(
-#         go.Scatter(x=list(range(len(ecot_mse))), y=ecot_mse, name="ECOT", line=dict(color="red")),
-#         secondary_y=False,
-#     )
-
-#     # Set x-axis title
-#     fig.update_xaxes(title_text="Time Step")
-
-#     # Set y-axes titles
-#     fig.update_yaxes(title_text="Mean Squared Error", secondary_y=False)
-
-#     # Set title
-#     fig.update_layout(
-#         title_text=f"MSE over Time Steps for {selected_trajectory}",
-#         hovermode="x unified"
-#     )
-
-#     # Add grid
-#     fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGrey')
-#     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGrey')
-
-#     # Display the plot
-#     st.plotly_chart(fig, use_container_width=True)
-    
-    
-#     # Slider to select frame
-#     frame_index = st.slider('Select Frame', 0, len(vla_mse)-1, 0)
-
-#     formatted_reasoning_string = format_reasoning_string(results[selected_trajectory]["ECoT"]['actions'][frame_index]["generated_text"])
-
-
-#     # Create composite image
-#     # Display composite image
-#     composite_image_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'composite_image.png')
-#     st.image(composite_image_path, caption=f"Frame {frame_index}")
-    
-#     col1, col2, col3 = st.columns(3)
-
-#     with col1:
-#         mse_comparison_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'mse_comparison.png')
-#         st.image(mse_comparison_path)
-
-#     with col2:
-#         action_deltas_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'action_deltas.png')
-#         st.image(action_deltas_path)
-
-#     with col3:
-#         frame_mse_comparison_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'frame_mse_comparison.png')
-#         st.image(frame_mse_comparison_path)
-
-        
-    
-#     col1, col2 = st.columns(2)
-    
-#     with col1:
-#         st.write("### ECoT Action")
-#         st.write(format_printable_action(results[selected_trajectory]["ECoT"]['actions'][frame_index]["action"]))
-#     with col2:
-#         st.write("### OpenVLA Action")
-#         st.write(format_printable_action(results[selected_trajectory]["OpenVLA"]['actions'][frame_index]["action"]))
-    
-        
-#     st.write("### Chain of Thought Response")
-#     st.write(formatted_reasoning_string)
     
 if selected_trajectory:
     instruction = results[selected_trajectory]["OpenVLA"]["instruction"]
