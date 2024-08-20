@@ -241,7 +241,7 @@ class OpenVLAInference:
         # action, generated_ids = vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
         # generated_text = processor.batch_decode(generated_ids)[0]
 
-        torch.manual_seed(0)
+        # torch.manual_seed(0)
 
 
         # breakpoint()
@@ -254,7 +254,7 @@ class OpenVLAInference:
         inputs = self.processor(prompt, Image.fromarray(image).convert("RGB")).to(self.device, dtype=torch.bfloat16)
         # action = self.vla.predict_action(**inputs, unnorm_key=unnorm_key, do_sample=False)
         # generated_text = ""
-        torch.manual_seed(0)
+        # torch.manual_seed(0)
         # breakpoint()
         if self.model == "ECoT":
             raw_action, generated_ids = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=True, max_new_tokens=1024, temperature=0.8)
