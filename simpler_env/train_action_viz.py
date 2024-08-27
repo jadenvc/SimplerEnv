@@ -29,13 +29,13 @@ width = 0.35  # the width of the bars
 @st.cache_resource
 def load_dataset():
     tf.random.set_seed(42)
-    ds_val = tfds.load('bridge_dataset', data_dir="/iliad/group/datasets/OXE_OCTO", split='val')
+    ds_val = tfds.load('bridge_dataset', data_dir="/iliad/group/datasets/OXE_OCTO", split='train')
     subset_size = 100
     return ds_val.shuffle(buffer_size=10000, seed=42, reshuffle_each_iteration=False).take(subset_size)
 
 @st.cache_data
 def load_results():
-    results_file = 'val_100_eval_results/0.json'
+    results_file = 'train_100_eval_results/0.json'
     try:
         with open(results_file, 'r') as f:
             return json.load(f)
@@ -497,7 +497,7 @@ def generate_and_store_visualizations(results, _ds_subset, output_directory):
 ds_subset = load_dataset()
 results = load_results()
 mse_dict = compute_mse_dict(results, ds_subset)
-generate_and_store_visualizations(results, ds_subset, 'val_pregenerated_visualizations')
+generate_and_store_visualizations(results, ds_subset, 'train_pregenerated_visualizations')
 
 
 # Set the title of the app

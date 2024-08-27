@@ -39,3 +39,7 @@ simpler_env/test.ipynb
 val_eval_results/
 val_eval_results_old/
 val_pregenerated_visualizations/
+train_100_eval_results/
+train_100_eval_results/
+val_100_eval_results/
+train_pregenerated_visualizations/

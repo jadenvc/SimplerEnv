@@ -10,6 +10,7 @@ from tf_agents.policies import py_tf_eager_policy
 from tf_agents.trajectories import time_step as ts
 from transforms3d.euler import euler2axangle
 from transformers import AutoProcessor, AutoModelForVision2Seq
+# from transformers.utils import WEIGHTS_NAME, CONFIG_NAME
 import torch
 import requests
 import json_numpy
@@ -17,6 +18,8 @@ import base64
 from PIL import Image
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+import os
+
 
 # === Utilities ===
 SYSTEM_PROMPT = (
@@ -69,20 +72,77 @@ class OpenVLAInference:
 
         self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
+        # if self.model == "ECoT":
+        #     self.hf_model_path = "Embodied-CoT/ecot-openvla-7b-bridge"
+        #     print("using ECoT")
+        # else:
+        #     # self.hf_model_path = "openvla/openvla-7b"
+        #     self.hf_model_path = "belkhale/openvla-bridge-7b" # Model only trained on the bridge task
+        #     print("using open vla")
+        
+        # self.processor = AutoProcessor.from_pretrained(self.hf_model_path, trust_remote_code=True)
+        # self.vla = AutoModelForVision2Seq.from_pretrained(
+        #     self.hf_model_path,
+        #     torch_dtype=torch.bfloat16,
+        #     low_cpu_mem_usage=True,
+        #     trust_remote_code=True,
+        # ).to(self.device)
+        
         if self.model == "ECoT":
             self.hf_model_path = "Embodied-CoT/ecot-openvla-7b-bridge"
+            model_path = '/iliad/u/sazzad14/huggingface_cache/models--belkhale--openvla-bridge-7b/snapshots/b1a0a502aa0cf267a3d71b607c6d1c4ec129e7cc'
             print("using ECoT")
         else:
-            self.hf_model_path = "openvla/openvla-7b" 
+            self.hf_model_path = "belkhale/openvla-bridge-7b"
+            model_path = '/iliad/u/sazzad14/huggingface_cache/models--Embodied-CoT--ecot-openvla-7b-bridge/snapshots/492b3dbf3df380f6da333f86ce06dab028176166'
             print("using open vla")
         
-        self.processor = AutoProcessor.from_pretrained(self.hf_model_path, trust_remote_code=True)
-        self.vla = AutoModelForVision2Seq.from_pretrained(
-            self.hf_model_path,
-            torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=True,
-            trust_remote_code=True,
-        ).to(self.device)
+        # # Set the custom cache directory
+        # cache_dir = "/iliad/u/sazzad14/huggingface_cache"
+        # model_cache_dir = os.path.join(cache_dir, f"models--{self.hf_model_path.replace('/', '--')}")
+        
+        if model_path is not None:
+            print('\n\n\n\n')
+            print("Loading model and processor from local cache.")
+            print('\n\n\n\n')
+            try:
+                self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+                self.vla = AutoModelForVision2Seq.from_pretrained(model_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True).to(self.device)
+                print('\n\n\n\n')
+                print("################################################")
+                print("Loaded model and processor from local cache.")
+                print("################################################")
+                print('\n\n\n\n')
+            except Exception as e:
+                print('\n\n\n\n')
+                print("################################################")
+                print(f"Could not load from local cache: {e}")
+                print("Attempting to download and load from Hugging Face...")
+                self.processor = AutoProcessor.from_pretrained(
+                    self.hf_model_path, 
+                    trust_remote_code=True
+                )
+                self.vla = AutoModelForVision2Seq.from_pretrained(
+                    self.hf_model_path,
+                    torch_dtype=torch.bfloat16,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True
+                ).to(self.device)
+                print("Successfully loaded model and processor from Hugging Face.")
+                print("################################################")
+                print('\n\n\n\n')
+        else:
+            print("Model not found in local cache. Downloading from Hugging Face...")
+            self.processor = AutoProcessor.from_pretrained(
+                self.hf_model_path, 
+                trust_remote_code=True
+            )
+            self.vla = AutoModelForVision2Seq.from_pretrained(
+                self.hf_model_path,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+                trust_remote_code=True
+            ).to(self.device)
 
         # print("loaded vla")
 
@@ -261,7 +321,11 @@ class OpenVLAInference:
             # action, generated_ids = self.vla_pa(**inputs, unnorm_key="bridge_orig", do_sample=False, max_new_tokens=1024)
             generated_text = self.processor.batch_decode(generated_ids)[0]
         else:
-            raw_action = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=True, temperature=0.8)
+            raw_action = self.vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=True, temperature=0.8, max_new_tokens=1024)
+            # print(raw_action)
+            raw_action = raw_action[0]
+            # print(raw_action)
+            # print(type(raw_action))
             generated_text = ""
         # breakpoint()
         # print("action")
