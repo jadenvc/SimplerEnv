@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import tensorflow_datasets as tfds
 import tensorflow as tf
-
+import seaborn as sns
 
 ALREADY_PROCESSED = False
 # Set wide mode
@@ -24,6 +24,47 @@ st.set_page_config(layout="wide")
 action_element_labels = ['WV 1', 'WV 2', 'WV 3', 'RD 1', 'RD 2', 'RD 3', 'Gripper Closedness']
 x_action_elements = np.arange(len(action_element_labels))  # the label locations
 width = 0.35  # the width of the bars
+
+def load_multiple_results(num_files=8):
+    all_results = []
+    for i in range(num_files):
+        file_path = f'val_100_eval_results/{i}.json'
+        try:
+            with open(file_path, 'r') as f:
+                all_results.append(json.load(f))
+        except (json.JSONDecodeError, FileNotFoundError):
+            print(f"Error reading JSON file {file_path}. Skipping this file.")
+    return all_results
+
+def calculate_action_uncertainty(all_results, trajectory, frame_index, low, high):
+    action_data = []
+    # print(f"Calculating action uncertainty for frame {frame_index} in trajectory {trajectory}...")
+    # print(len(all_results))
+    
+    for result in all_results:
+        if trajectory in result and "ECoT" in result[trajectory]:
+            action = result[trajectory]["ECoT"]['actions'][frame_index]["raw_action"]
+            # print(action)
+            normalized_action = min_max_normalize(np.array(action), low, high)
+            action_data.append(normalized_action)
+    
+    # print(f"Action data for frame {frame_index} in trajectory {trajectory}: {action_data}")
+    return np.array(action_data)
+
+def create_uncertainty_boxplot(action_data):
+    fig, ax = plt.subplots(figsize=(12, 6))
+    if action_data.size == 0:
+        print("Warning: Empty action data provided to boxplot.")
+    sns.boxplot(data=action_data, ax=ax)
+    ax.set_xticks(np.arange(len(action_element_labels)))
+    ax.set_xticklabels(action_element_labels)
+    ax.set_xlabel('Action Dimensions')
+    ax.set_ylabel('Normalized Action Values')
+    ax.set_title('Uncertainty Across Action Dimensions (Normalized)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    return fig
+
 
 
 @st.cache_resource
@@ -144,63 +185,6 @@ def parse_reasoning_string(reasoning_string):
 
     return gripper_position, visible_objects, cleaned_reasoning_string
 
-# def create_composite_image(image_array, gripper_position, visible_objects, reasoning_text):
-#     # Load the image
-#     image = Image.fromarray(image_array)
-#     original_width, original_height = image.size
-
-#     # Check if the original image is 256x256 and scale it up if so
-#     # if original_width == 256 and original_height == 256:
-#     image = image.resize((1024, 1024))
-#     original_width, original_height = image.size
-
-
-#     # Scaling factors (since the image is now scaled up to 512x512)
-#     scale_x = original_width / 256
-#     scale_y = original_height / 256
-    
-    
-#     # Create a new image with double the width to accommodate the text
-#     composite_image = Image.new('RGB', (2 * original_width, original_height), (255, 255, 255))
-#     composite_image.paste(image, (0, 0))
-
-#     # Draw on the image
-#     draw = ImageDraw.Draw(composite_image)
-
-#     # Draw gripper position (if available)
-#     if gripper_position:
-#         scaled_gripper_position = [int(gripper_position[0] * scale_x), int(gripper_position[1] * scale_y)]
-#         draw.ellipse(
-#             (scaled_gripper_position[0] - 5, scaled_gripper_position[1] - 5,
-#              scaled_gripper_position[0] + 5, scaled_gripper_position[1] + 5),
-#             fill='red', outline='red'
-#         )
-
-#     # Define font for text with increased size
-#     font1 = ImageFont.load_default().font_variant(size=44)  # Larger size for main text
-#     font2 = ImageFont.load_default().font_variant(size=32)
-        
-#     # Draw visible objects bounding boxes and labels
-#     for obj_label, bbox in visible_objects:
-#         scaled_bbox = [int(coord * scale_x if i % 2 == 0 else coord * scale_y) for i, coord in enumerate(bbox)]
-#         draw.rectangle(scaled_bbox, outline='blue', width=2)
-#         draw.text((scaled_bbox[0], scaled_bbox[1] - 20), obj_label, fill='blue', font=font2)
-
-#     # Draw reasoning text on the right side with text wrapping
-#     text_x = original_width + 10
-#     text_y = 10
-#     max_width = original_width - 20  # Maximum width for text
-#     line_height = font1.size + 1  # Adjust line height based on font size
-
-#     for paragraph in reasoning_text.split('\n'):
-#         # Wrap text for each paragraph
-#         wrapped_lines = wrap(paragraph, width=int(max_width / (font1.size / 2)))  # Estimate characters per line
-#         for line in wrapped_lines:
-#             draw.text((text_x, text_y), line, fill='black', font=font1)
-#             text_y += line_height
-#         text_y += line_height // 2  # Add some extra space between paragraphs
-
-#     return composite_image
 
 def create_composite_image(image_array, gripper_position, visible_objects, reasoning_text):
     # Load the image
@@ -251,7 +235,7 @@ def create_composite_image(image_array, gripper_position, visible_objects, reaso
                 y0, y1 = y1, y0
 
             # Debugging information
-            print(f"Drawing rectangle for {obj_label} with coordinates: ({x0}, {y0}, {x1}, {y1})")
+            # print(f"Drawing rectangle for {obj_label} with coordinates: ({x0}, {y0}, {x1}, {y1})")
 
             draw.rectangle([x0, y0, x1, y1], outline='blue', width=2)
             draw.text((x0, y0 - 20), obj_label, fill='blue', font=font2)
@@ -363,6 +347,8 @@ def generate_and_store_visualizations(results, _ds_subset, output_directory):
     if ALREADY_PROCESSED:
         return
     
+    all_results = load_multiple_results()
+    
     # open and load this json /iliad/group/datasets/OXE_OCTO/bridge_dataset/1.0.0/dataset_statistics_0877b5ade4c695b2af4659ecbe4c9887e80f7d64fbb1401e76227352dbee94b9.json
     with open('/iliad/group/datasets/OXE_OCTO/bridge_dataset/1.0.0/dataset_statistics_0877b5ade4c695b2af4659ecbe4c9887e80f7d64fbb1401e76227352dbee94b9.json', 'r') as f:
         dataset_statistics = json.load(f)
@@ -382,18 +368,18 @@ def generate_and_store_visualizations(results, _ds_subset, output_directory):
         if trajectory_metadata['has_language'].numpy() and \
                 (trajectory in results and len(list(results[trajectory].keys())) == 2):
                     
-            print(f"Generating visualizations for {trajectory}...")
+            # print(f"Generating visualizations for {trajectory}...")
             
             trajectory_dir = os.path.join(output_directory, trajectory)
             os.makedirs(trajectory_dir, exist_ok=True)
             
-            if results.get(trajectory) is None:
-                print(f"Results not found for {trajectory}. Skipping visualization generation.")
-                continue
+            # if results.get(trajectory) is None:
+            #     print(f"Results not found for {trajectory}. Skipping visualization generation.")
+            #     continue
             
-            if results[trajectory].get("OpenVLA") is None or results[trajectory].get("ECoT") is None:
-                print(f"Results not found for {trajectory}. Skipping visualization generation.")
-                continue
+            # if results[trajectory].get("OpenVLA") is None or results[trajectory].get("ECoT") is None:
+            #     print(f"Results not found for {trajectory}. Skipping visualization generation.")
+            #     continue
             
             
             
@@ -438,7 +424,8 @@ def generate_and_store_visualizations(results, _ds_subset, output_directory):
                 if os.path.exists(os.path.join(frame_dir, 'composite_image.png')) \
                     and os.path.exists(os.path.join(frame_dir, 'mse_comparison.png')) \
                     and os.path.exists(os.path.join(frame_dir, 'action_deltas.png')) \
-                    and os.path.exists(os.path.join(frame_dir, 'frame_mse_comparison.png')):
+                    and os.path.exists(os.path.join(frame_dir, 'frame_mse_comparison.png'))\
+                    and os.path.exists(os.path.join(frame_dir, 'uncertainty_boxplot.png')):
                     continue
                 
                 # Generate and save composite image
@@ -482,6 +469,14 @@ def generate_and_store_visualizations(results, _ds_subset, output_directory):
                     ax.set_ylabel('Mean Squared Error')
                     ax.set_title('MSE Comparison for Frame')
                     fig.savefig(frame_mse_comparison_path)
+                    plt.close(fig)
+                    
+                # Generate and save uncertainty box plot
+                uncertainty_boxplot_path = os.path.join(frame_dir, 'uncertainty_boxplot.png')
+                if not os.path.exists(uncertainty_boxplot_path):
+                    action_data = calculate_action_uncertainty(all_results, trajectory, frame_index, low, high)
+                    fig = create_uncertainty_boxplot(action_data)
+                    fig.savefig(uncertainty_boxplot_path)
                     plt.close(fig)
         else:
             print(f"Skipping {trajectory} as it does not have language or results for both models.")
@@ -539,6 +534,8 @@ if selected_trajectory:
     mse_comparison_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'mse_comparison.png')
     action_deltas_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'action_deltas.png')
     frame_mse_comparison_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'frame_mse_comparison.png')
+    uncertainty_boxplot_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'uncertainty_boxplot.png')
+
 
     st.image(composite_image_path, caption=f"Frame {frame_index}")
 
@@ -548,13 +545,15 @@ if selected_trajectory:
     with col2:
         st.image(action_deltas_path)
     with col3:
-        st.image(frame_mse_comparison_path)
-
-    col1, col2 = st.columns(2)
+        st.image(uncertainty_boxplot_path, caption="Uncertainty Across Action Dimensions")
+    
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.write("### ECoT Action")
         st.write(format_printable_action(results[selected_trajectory]["ECoT"]['actions'][frame_index]["action"]))
     with col2:
+        st.image(frame_mse_comparison_path)
+    with col3:
         st.write("### OpenVLA Action")
         st.write(format_printable_action(results[selected_trajectory]["OpenVLA"]['actions'][frame_index]["action"]))
 

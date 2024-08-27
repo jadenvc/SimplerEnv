@@ -534,7 +534,7 @@ if selected_trajectory:
     frame_index = st.slider('Select Frame', 0, len(vla_mse)-1, 0)
 
     # Load and display images
-    output_directory = 'val_pregenerated_visualizations'
+    output_directory = 'train_pregenerated_visualizations'
     composite_image_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'composite_image.png')
     mse_comparison_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'mse_comparison.png')
     action_deltas_path = os.path.join(output_directory, selected_trajectory, f'frame_{frame_index}', 'action_deltas.png')
